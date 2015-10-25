@@ -1,3 +1,5 @@
+#!/usr/bin/env guile
+!#
 (define (compose f0 f1)
 	(lambda (x)
 		(f1 (f0 x))))
@@ -30,81 +32,77 @@
 		(f)
 		x))
 
-(define (with-0 . y)
-	(let ([f (apply pipe y)])
-		(f 0)))
-
 (define (x-input x . y)
 	(let ([f (apply pipe y)])
 		(f x)))
 
-(define x-nothing
+(define xl-nothing
 	(lambda (x)
-		(lambda (x-append) '())))
+		(lambda (xl-append) '())))
 
-(define x-identity
+(define xl-identity
 	(lambda (x)
-		(lambda (x-append) (x-append x))))
+		(lambda (xl-append) (xl-append x))))
 
-(define (x-bind . y)
+(define (xl-bind . y)
 	(let ([get-sub-xl (apply pipe y)])
 		(lambda (xl)
-			(lambda (x-append)
+			(lambda (xl-append)
 				(xl
 					(lambda (item)
-						((get-sub-xl item) x-append)))))))
+						((get-sub-xl item) xl-append)))))))
 
-(define (x-map . y)
-	(x-bind
-		(compose (apply pipe y) x-identity)))
+(define (xl-map . y)
+	(xl-bind
+		(compose (apply pipe y) xl-identity)))
 
-(define (x-reduce acc f)
+(define (xl-reduce acc f)
 	(lambda (xl)
-		(lambda (x-append)
+		(lambda (xl-append)
 			(xl
 				(lambda (x)
 					(set! acc (f acc x))))
-			(x-append acc))))
+			(xl-append acc))))
 
-(define (x-filter . y)
+(define (xl-filter . y)
 	(let ([f (apply pipe y)])
-		(x-bind
+		(xl-bind
 		(lambda (x)
 			(if (f x)
-				(x-identity x)
-				(x-nothing x))))))
+				(xl-identity x)
+				(xl-nothing x))))))
 
-(define (x-until . y)
+(define (xl-until . y)
 	(let ([f (apply pipe y)])
 		(lambda (xl)
-			(lambda (x-append)
+			(lambda (xl-append)
 				(call/cc
 					(lambda (break)
 						(xl
 							(lambda (x)
 								(if (f x)
 									(break x)
-									(x-append x))))))))))
+									(xl-append x))))))))))
 
-(define x-N
-	(lambda (x-append)
+(define xl-N
+	(lambda (xl-append)
 		(define (loop acc)
-			(x-append acc)
+			(xl-append acc)
 			(loop (+ 1 acc)))
 		(loop 0)))
 
-(define (x-hook . y)
+(define (xl-hook . y)
 	(let ([f (apply pipe y)])
-		(x-map (hook f))))
+		(xl-map (hook f))))
 
-(define x-exec
+(define xl-exec
 	(lambda (xl)
 		(xl (lambda (x) '()))))
 
 (define list->xl
 	(lambda (ls)
-		(lambda (x-append)
-		(map x-append ls))))
+		(lambda (xl-append)
+		(map xl-append ls))))
 
 (define xl->list
 	(lambda (xl)
@@ -113,6 +111,8 @@
 				(lambda (x)
 					(set! acc (cons x acc))))
 			(reverse acc))))
+
+(define xl-force (pipe xl->list list->xl))
 
 (define (square x)
 	(* x x))
@@ -155,11 +155,10 @@
 			ret))
 		get-counter))
 
-(define-macro
-	(tee x)
-	`(lambda (v)
-		 (set! ,x v)
-		 v))
+(define-syntax tee
+	(syntax-rules ()
+		((_ x)
+		 (lambda (v) (set! x v) v))))
 
 ;;------------test---------------
 (define n 0)
@@ -167,29 +166,13 @@
 (define (square x) (* x x))
 
 (x-input
-	x-N
-	(x-until
-		(counter)
-		(gte 3))
-	(x-bind
-		(const x-N)
-		(x-until (gte 3)))
-	(x-filter
-		(counter)
-		(gte 4))
-	(x-hook (tee n))
-	(x-hook println)
-	x-exec)
-
-(x-input
-	x-N
-	(x-until
-		(counter)
-		(gte 10))
-	(x-map square)
-	(x-reduce 0 +)
-	(x-hook println)
-	x-exec)
+	xl-N
+	(xl-until (counter) (gte 20))
+	(xl-map square)
+	xl-force
+	(xl-reduce 0 +)
+	xl->list
+	println)
 
 (x-input
 	0
@@ -199,11 +182,14 @@
 	println)
 
 (x-input
-	'(0 1 2 3 4 5 6)
-	list->xl
-	(x-map (add 1))
-	(x-map square)
-	(x-filter square (gte 8))
+	xl-N
+	(xl-until (counter) (gte 10))
+	(xl-map (add 1) square)
+	(xl-filter square (gte 8))
 	xl->list
-	println)
+	(hook println)
+	(pipe
+		reverse
+		(hook (pipe car println))
+		println))
 
