@@ -1,3 +1,5 @@
+
+;; 宏实现 define-method
 (define-syntax define-method
   (lambda (x) 
     (syntax-case x ()
